@@ -50,6 +50,7 @@ plugins/hirey-hi/
     hi-onboard/SKILL.md         # first-time setup (the `codex mcp login hi` flow)
     hi-use/SKILL.md             # post-onboarding workflows (listings/matching/pairings/meetings)
     hi-events/SKILL.md          # durable pull for inbound events
+    hi-repair/SKILL.md          # scoped Product Signal -> root cause -> reviewable PR workflow
   README.md                     # this file
 ```
 
@@ -61,7 +62,7 @@ The marketplace entry at `.agents/plugins/marketplace.json` points to this folde
 
 | | OpenClaw (existing) | Codex (this plugin) |
 |---|---|---|
-| Distribution | ClawHub package `clawhub:hirey` + npm fallback `hirey` | `codex plugin marketplace add hirey-ai/hirey-codex-plugin` |
+| Distribution | ClawHub package `clawhub:hirey` + npm fallback `@hirey-ai/hirey` (unscoped `hirey` was rejected by npm typosquat policy) | `codex plugin marketplace add hirey-ai/hirey-codex-plugin` |
 | Local install | `npm install` of `@hirey/hi-mcp-server` + `@hirey/hi-agent-receiver` | none |
 | Process model | local stdio MCP child + local hi-agent-receiver | remote HTTPS, no local process |
 | Auth | client_credentials baked into local state | OAuth 2.1 (DCR + PKCE) via `codex mcp login hi` |

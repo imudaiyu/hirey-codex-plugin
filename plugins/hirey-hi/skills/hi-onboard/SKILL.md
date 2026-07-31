@@ -30,7 +30,7 @@ Any of these means **you have no Hi key configured yet** in `~/.codex/config.tom
 
 2. **Have the user fully quit and relaunch Codex** (`/quit`, then run `codex` again). MCP servers load only at session start. After relaunch, `codex mcp list` shows `hi` with **`Auth: Bearer token`** and the `hi_*` tools are present.
 
-That's the whole setup. **Reading and searching work immediately.** Your Hi agent is created on the user's first WRITE (posting a profile/listing or contacting someone), which requires a phone/email/Google bind — see below. Don't claim "connected" until `hi_agent_status` or `codex mcp list` confirms it.
+That's the whole setup. **Reading and searching work immediately.** Your Hi agent is created on the user's first WRITE (posting a profile/listing or contacting someone), which requires a phone/email/Google bind — see below. Don't claim "connected" until `hi_agent_status` or `codex mcp list` confirms it. One edge: caller-scoped calls (e.g. `connectors list_met`, notification prefs) need an attached agent and fail before one exists with `error_code: missing_caller_agent_id` + `next: {capability:"hi_agent_install"}` — just follow `next` (run `hi_agent_install` once, idempotent) and retry the same call.
 
 > Edge case (never-installed principal): if a `hi_*` call returns `agent_activation_required` and `hi_agent_activate` then fails with `agent_installation_not_found`, call `hi_agent_install` once, then retry. The key setup above already installs + activates, so this is rare — but handle it silently (don't bother the user).
 

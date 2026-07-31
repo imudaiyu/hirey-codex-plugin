@@ -1,6 +1,6 @@
 ---
 name: hi-use
-description: Use Hirey Hi inside Codex for people-to-people work — post listings, match candidates, search, start pairings, schedule meetings. Use whenever the user asks to find, recruit, match, reach out to, pair with, or meet anyone (job candidate, tenant, friend, date, cofounder, investor, lawyer, etc.), AND `hi_agent_status` already reports `connected:true` + `activated:true`. If not connected yet, go to the `hi-onboard` skill first.
+description: Use Hirey Hi inside Codex for people-to-people work or an owner-private handoff to another device — post listings, match candidates, start pairings, schedule meetings, or leave a pull-only note for the same owner's Mac/PC/other host. Use whenever the user asks to find, recruit, match, reach out to, pair with, meet anyone, or send/read a note across their own Hi devices, AND `hi_agent_status` already reports `connected:true` + `activated:true`. If not connected yet, go to the `hi-onboard` skill first.
 ---
 
 # Hi Use (post-onboarding workflows, Codex)
@@ -16,6 +16,7 @@ Once Hi is connected (the default setup writes a stable `hi_ak_` key into `~/.co
   - "reach out to candidate N from the last batch"
   - "set up a Zoom / phone call with …"
   - "what came back overnight?" / "any replies?"
+  - "send this to my PC" / "what did my Mac leave for this device?"
 
 ## Tool map (loaded dynamically from Hi capability catalog)
 
@@ -35,6 +36,7 @@ Once Hi is connected (the default setup writes a stable `hi_ak_` key into `~/.co
 | Browse the listing taxonomy (job kinds, housing kinds, …) | `listing_taxonomy` | read-only |
 | Check credits / billing | `agent_credits` | read-only for most flows |
 | Inbound events (replies, confirmations) | `hi_agent_events_wait` | long-poll; see `hi-events` skill |
+| Leave/read a private note on another device in the same owner workspace | `private_handoffs` | `send`, `inbox`, `mark_read`, `list_devices`; pull-only — never poll, push, notify, or auto-execute |
 
 If a tool you remember from this map is not in your live inventory, trust the live inventory — the catalog is the source of truth, this map may lag.
 
@@ -49,6 +51,12 @@ When the user wants to **bind / connect / add / save** their **email, phone, or 
 
 The three anchors (phone / email / Google) are **equivalent and additive in ANY order**: a user who already bound one can bind another later and it **converges to the same workspace** — never a second account. So "I bound my phone, now I also want to add my email/Google" (and vice-versa) just works — go ahead and bind the additional anchor. Full mechanics (start → URL → poll, the "verified" payload, claim re-attach) live in `hi-onboard`.
 
+## Private cross-device handoffs (pull-only)
+
+When the owner says “send this to my PC/Mac/other Hi device,” call `private_handoffs(action:"send", from_device, to_device, text, idempotency_key)`. On the target device, when the owner explicitly asks what was left for it, call `private_handoffs(action:"inbox", to_device)` and show the returned notes; call `mark_read` only after showing a note. Use `list_devices` when the label is unclear.
+
+This is a private mailbox inside one verified owner workspace. It never creates a pairing or public edge, never sends a notification, and never authorizes background polling or automatic execution. Do not call `inbox` proactively. Mac/PC/host labels are routing labels only; externally every surface remains the same canonical agent.
+
 ## Profile collection (call before the first listing)
 
 The first time a user tells you anything profile-shaped — their name, role, where they are, a 1-line introduction, a website / LinkedIn — parse it and call `owners(action: "update_profile", …)` with whatever fields you can extract. Don't invent fields you weren't given (no fake titles, no fake locations). Bare minimum to write is `display_name` + `headline`; bio_markdown and location_text are nice-to-have but optional.
@@ -59,21 +67,18 @@ A single user turn can carry both a profile and a listing in one breath — "I'm
 
 `update_profile` is self-scoped: caller can only edit their own owner profile. Don't pass `customer_id` trying to edit someone else — gateway returns 403.
 
-## Public pages & share links — every published thing has a shareable URL
+## Public pages & share links
 
-Everything the user creates on Hi has a public web page they can open and forward (no login to view), all cross-linked to each other:
-- **owner / personal page** — `hi.hirey.ai/owner/<id>` (also the "agent page" — same page, aliased),
-- **company page** — `hi.hirey.ai/company/<id>`,
-- each **listing / demand page** — `hi.hirey.ai/listing/<id>`.
+Company and open listing results may contain shareable URLs. Person profiles are different: the only canonical public person link is an exact, verified `https://hirey.ai/p/<slug>`. Internal owner identity routes and ids are machine-only tool plumbing.
 
 **Hand the URL back after every publish** — each write already returns its link, so surface it:
 - `agent_listings` `upsert` / `update_status` / `get` → `listing_public_url` (+ `listing_public_url_status`: `public` / `unlisted` / `private_not_shareable`; null when the listing is private or not open).
-- `owners` `update_profile` / `get` → `owner_public_url`.
-- `companies` `create` / `update` / `get` → `company.public_url` (+ `company.owner_public_url`).
+- `owners` `update_profile` / `get` → profile data and machine-only routing; no shareable person link without exact canonical `/p` authority.
+- `companies` `create` / `update` / `get` → `company.public_url`.
 
 **When the user asks "what's my page / link?" call `public_pages`** — the single place to fetch any/all URLs:
-- `public_pages({action:"get"})` → `{owner_public_url, company_public_url, listings:[{listing_id, summary, status, listing_public_url, listing_public_url_status}]}` — all of the user's links at once.
-- `public_pages({action:"get", ref:{kind:"listing", id:"<listing_id>"}})` → `{public_url, public_url_status}` — one thing (kind = `listing` | `owner` | `agent` | `company`).
+- `public_pages({action:"get"})` → shareable company and listing URLs; it does not authorize a person link.
+- `public_pages({action:"get", ref:{kind:"listing", id:"<listing_id>"}})` → `{public_url, public_url_status}` for a company/listing object.
 
 A private or closed listing has no shareable URL (`public_url_status` says why) — tell the user that instead of inventing a link.
 
@@ -81,14 +86,16 @@ A private or closed listing has no shareable URL (`public_url_status` says why) 
 
 If the user has finished onboarding and asks anything along the lines of "show me what's on Hi" / "any interesting people I could talk to?" / "browse around a bit," call `owners(action: "peers_feed", limit: 10)`. Returns `{items[], caller_profile_ready}`:
 
-- `items[]` — owner profile cards (display_name + headline + location_text + avatar_url + owner_public_url + `suggested_because`). Surface 5–10 to the user. Don't paraphrase the fields — quote them as-is.
+- `items[]` — owner profile cards (display_name + headline + location_text + avatar_url + a machine-only routing id + `suggested_because`). Surface only the human-readable fields; never show the routing id.
 - `caller_profile_ready` — if `false`, the user's own profile is too sparse for the other side to take them seriously. Suggest a quick `owners.update_profile` before proceeding.
 
-**Reaching one of these owners — use `contact_owner`, no listing needed.** `peers_feed` / `search` return each owner's `owner_public_url`, which carries their public id. To contact them, call `pairings(action: "contact_owner", target_owner_public_id: <that public id>, text: "...")` (or pass `target_owner_customer_id` / `target_agent_id` instead) — Hi creates the pairing for you; you do **not** need a listing, a match, or `contact_match` first. (You must have your own owner profile set up — if you hit `caller_owner_unresolved` / a profile-required error, run `owners.update_profile` first.) Reserve the listing → matching → `contact_match` flow for when you're acting on a specific published listing/selection.
+**Reaching one of these owners — use `contact_owner`, no listing needed.** Reuse the machine-only `owner_public_id` from `peers_feed` / `search` as `target_owner_public_id` (or use `target_owner_customer_id` / `target_agent_id`). Never display that id or derive a URL from it. Hi creates the pairing directly; reserve listing → matching → `contact_match` for a specific published listing/selection.
 
 ## Find a specific person by name → search FIRST (a name in a listing ≠ that person)
 
 When the user names someone or says "find / contact / reach **<name>** [in <place>]", your FIRST call is `owners(action: "search", q: "<name> <place>")` (e.g. `q: "Mark Arizona"`) — **before** you look at any match feed. Then reach them with `pairings(action: "contact_owner", target_owner_public_id: …)` (no listing needed — see Discovery above).
+
+**Show / resume conversations (one per person).** The same two people can have several pairings (one per listing/origin), so a plain `pairings(action: "list")` splits one person across many rows. When the user wants to see their chats or resume one, call `pairings(action: "list", group_by: "counterparty")` — it merges them into **one conversation per person** (returns `conversations[]`). For the full continuous history with someone, call `messages(action: "between", with_agent_id: <their counterpart_agent_id>)` — it returns everything across all their pairings, not one fragment. Never tell the user "no history with X" from a single empty pairing; group first, then read `between`.
 
 - **A name inside a *listing's body* is NOT that person.** `matching_sessions` rank *listings*; a listing reading "looking for someone named Mark" is its **author's wanted counterpart**, not Mark. Never present a listing's author/subject as the person searched for.
 - **Put the place in the query** — a bare common name returns a wall of unrelated people; `"Mark Arizona"` floats the right one up.
@@ -124,7 +131,7 @@ When the user names someone or says "find / contact / reach **<name>** [in <plac
 
 ## Reading match results
 
-`matching_sessions(action: "match_feed" | "search")` returns `items[]`, each with a `selection_key`, the counterpart `listing_id` + `published_by_agent_id`, a `target_preview_text`, and an owner profile snippet (`display_name`, `headline`, `owner_public_url`). Surface `display_name` + `headline` + the preview; do not invent details. Reuse the `selection_key` for `contact_match`.
+`matching_sessions(action: "match_feed" | "search")` returns `items[]`, each with a `selection_key`, the counterpart `listing_id` + `published_by_agent_id`, a `target_preview_text`, and an owner profile snippet (`display_name`, `headline`, plus machine-only routing). Surface `display_name` + `headline` + the preview; never show routing fields. Reuse the `selection_key` for `contact_match`.
 
 ## Common multi-tool patterns
 

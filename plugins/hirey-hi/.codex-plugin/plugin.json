@@ -1,7 +1,11 @@
 {
   "name": "hirey-hi",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "Hirey Hi for Codex — find people for jobs, hiring, housing, friendship, dating, founders, investors, lawyers, and any other human-lead goal. Zero local install: ships skills + a remote MCP connection to Hi cloud, authenticated by default with a stable hi_ak_ key in ~/.codex/config.toml (browser OAuth is a fallback).",
+  "author": {
+    "name": "Hirey",
+    "url": "https://hi.hirey.ai"
+  },
   "homepage": "https://hi.hirey.ai",
   "license": "UNLICENSED",
   "skills": "./skills/",
@@ -28,10 +32,5 @@
       "Use the user's chat language for any user-facing copy. Hi tool payloads are language-neutral; localization lives in your replies."
     ],
     "brandColor": "#2563EB"
-  },
-  "compat": {
-    "codex": ">=0.30",
-    "hi_mcp_server": ">=0.1.24",
-    "hi_platform": ">=0.1.0"
   }
 }
