@@ -63,6 +63,16 @@ If no assigned/admitted case is eligible, Walter's staff worker may inspect at m
 
 Walter reviews the causal claim, regression guard, diff, and checks. Deployment follows the repository's own release discipline. Only after a real deploy receipt and production verification may the release side mark the case monitoring/resolved.
 
+The release operator records facts through the staff-only surface:
+
+1. Use `repair_cases(action="list_cases")` to find cases awaiting release, then `get_case_pack` to review the causal claim, PR and regression guard.
+2. Call `repair_cases(action="record_release_evidence", kind="deploy_receipt")` with the exact deployment receipt.
+3. Call `repair_cases(action="advance_release", status="deployed_unverified")` with the latest Problem Case revision if production verification is not complete yet. This transition also revokes pending/active grants for the case.
+4. After checking the real production surface, call `record_release_evidence` with `kind="production_verification"` and its exact bounded receipt.
+5. Call `advance_release` with the latest revision and `status="monitoring"` or `status="resolved"`. Both states require production verification; never infer it from merge, CI, or deployment success.
+
+If an action returns a revision conflict, call `get_case_pack` before retrying. Do not reuse old release receipts after a reporter says `still_broken`.
+
 When `product_signals(action="get")` shows `repair.status=live_please_verify`, ask the original reporter to retry the original symptom:
 
 - `works_now` records reporter confirmation;
