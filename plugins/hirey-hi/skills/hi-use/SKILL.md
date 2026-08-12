@@ -1,6 +1,6 @@
 ---
 name: hi-use
-description: Use Hirey Hi inside Codex for people-to-people work or an owner-private handoff to another device — post listings, match candidates, start pairings, schedule meetings, or leave a pull-only note for the same owner's Mac/PC/other host. Use whenever the user asks to find, recruit, match, reach out to, pair with, meet anyone, or send/read a note across their own Hi devices, AND `hi_agent_status` already reports `connected:true` + `activated:true`. If not connected yet, go to the `hi-onboard` skill first.
+description: Use Hirey Hi inside Codex for people-to-people work, Product Signals, or an owner-private handoff to another device — post listings, match candidates, start pairings, schedule meetings, report product bugs/feedback, or leave a pull-only note for the same owner's Mac/PC/other host. Use whenever the user asks to find, recruit, match, reach out to, pair with, meet anyone, report a HiRey product issue, or send/read a note across their own Hi devices, AND `hi_agent_status` already reports `connected:true` + `activated:true`. If not connected yet, go to the `hi-onboard` skill first.
 ---
 
 # Hi Use (post-onboarding workflows, Codex)
@@ -16,6 +16,7 @@ Once Hi is connected (the default setup writes a stable `hi_ak_` key into `~/.co
   - "reach out to candidate N from the last batch"
   - "set up a Zoom / phone call with …"
   - "what came back overnight?" / "any replies?"
+  - "HiRey is broken here" / "report this bug or product feedback"
   - "send this to my PC" / "what did my Mac leave for this device?"
 
 ## Tool map (loaded dynamically from Hi capability catalog)
@@ -36,9 +37,24 @@ Once Hi is connected (the default setup writes a stable `hi_ak_` key into `~/.co
 | Browse the listing taxonomy (job kinds, housing kinds, …) | `listing_taxonomy` | read-only |
 | Check credits / billing | `agent_credits` | read-only for most flows |
 | Inbound events (replies, confirmations) | `hi_agent_events_wait` | long-poll; see `hi-events` skill |
+| Submit or revisit a HiRey bug, friction, idea, request, or other product evidence | `product_signals` | `submit`, `list`, `get`, `daily_summary`, `verify_repair`; caller-scoped by default, with company scope reserved for Product Signals staff |
 | Leave/read a private note on another device in the same owner workspace | `private_handoffs` | `send`, `inbox`, `mark_read`, `list_devices`; pull-only — never poll, push, notify, or auto-execute |
 
 If a tool you remember from this map is not in your live inventory, trust the live inventory — the catalog is the source of truth, this map may lag.
+
+## Product Signals — report a HiRey bug or feedback
+
+When the user supplies concrete evidence about HiRey's product — a bug, friction, idea, request, validation, objection, security note, or general feedback — call `product_signals(action:"submit", ...)` in the same turn. This MCP route writes to the same durable Product Signals source ledger used by HiRey's iMessage/Rey intake; it is not a separate bug tracker.
+
+- Preserve the user's observed facts and expected behavior. Put an unverified theory only in `hypothesis`; never invent severity, impact, attribution, reproduction, or fix status.
+- Split independent symptoms into separate `items` and pass a stable 8–128 character `idempotency_key`. Reuse that exact key only when retrying the same submission.
+- Return only the real `BUG-` / `SIG-` receipts from the tool result. Never mint or guess a receipt in prose. The prefix is a stable legacy ID, not the signal's current kind.
+- `list` and `get` default to `scope:"mine"`. Use `scope:"company"` only when the current caller is actually authorized as Product Signals staff.
+- Only call `verify_repair` after `get` or `list` returns `repair.status="live_please_verify"` and the original reporter has retried the original symptom. Use `verdict:"works_now"` or `"still_broken"` plus a stable idempotency key.
+
+Example:
+
+`product_signals(action:"submit", idempotency_key:"imac-video-publish-20260812", items:[{kind:"bug", title:"Video publishing remains stuck", area:"video publishing", observed:"Publishing keeps spinning", expected:"Publishing completes", source_kind:"self_report"}])`
 
 ## Binding / connecting your identity to Hi (proactive)
 
@@ -138,6 +154,7 @@ When the user names someone or says "find / contact / reach **<name>** [in <plac
 - **"Find me 20 backend engineers in San Francisco … reach out to the best three."** → `listing_taxonomy` → `agent_listings(action: "upsert")` (recruiting listing with target requirements) → `matching_sessions(action: "match_feed", listing_id)` → present candidates → user picks → for each: `matching_sessions(action: "contact_match", listing_id, selection_key, text)`.
 - **"Find someone named Walter / a founder building agent infra."** → `owners(action: "search", q: "walter")` — bilingual fuzzy, no listing needed.
 - **"Did anyone reply overnight?"** → `hi_agent_events_wait(timeout_ms: 5000)`; group by `pairing_id`. See `hi-events`.
+- **"HiRey's video publish keeps spinning; report this bug."** → `product_signals(action: "submit", idempotency_key: <stable key>, items: [{kind: "bug", observed: <user-supplied fact>, expected: <user-supplied expectation>, ...}])` → return the exact receipt(s).
 - **"Schedule a 30-min Zoom with the senior PM thread."** → get the `pairing_id` (from your prior `contact_match` result or `pairings(action: "timeline")`) → `thread_meetings(action: "start", pairing_id, flow_kind: "propose_slot", modality: "zoom", requested_windows: [<ISO ranges>])`.
 
 ## Anti-patterns
@@ -145,6 +162,7 @@ When the user names someone or says "find / contact / reach **<name>** [in <plac
 - ❌ Using `matching_sessions.search` for a by-name lookup — that needs a published source listing; use `owners(action: "search")`.
 - ❌ Inventing match cards / candidates the model "thinks would fit". Only surface what Hi returned.
 - ❌ Putting raw scores / internal fields into the outbound `contact_match` `text` — keep it human.
+- ❌ Acknowledging a concrete HiRey bug only in prose, saving it as relationship memory, or inventing a `BUG-` / `SIG-` ID — use `product_signals.submit` and surface only its durable receipt.
 - ❌ Using `hi_agent_install` mid-workflow to "reset" things. If a tool fails, surface the error; do not reinstall.
 - ❌ Asking the user to paste a random API token to "make it work". A `hi_*` auth failure is fixed by the documented connection setup — the stable `hi_ak_` key in `~/.codex/config.toml` (or `codex mcp login hi` as the OAuth fallback) followed by a Codex restart — not by inventing a token to paste. See `hi-onboard` / `hi-stable-key`.
 - ❌ Treating "tool not found" / "no such tool `hi_*`" as a login problem. If a `hi_*` tool literally isn't in your inventory, the `hirey-hi` MCP server didn't load into this Codex session — bounce to `hi-onboard` step 1. The fix is a Codex **restart** (Codex only spawns MCP servers at session start; openai/codex#4955, #7767), not `codex mcp login hi`.
