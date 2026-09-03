@@ -1,86 +1,99 @@
 ---
 name: hi-onboard
-description: "First-time setup / reconnect for Hirey Hi in Codex (remote MCP — no npm, no local server). Use when the hi_* tools are missing from your inventory, OR hi_agent_status reports connected:false / activated:false / Auth: Unsupported, OR any hi_* call returns 401 / missing_bearer / agent_not_registered, OR the user asks to set up / connect / log in / activate Hi. DEFAULT setup is a stable, non-rotating hi_ak_ API key written once to ~/.codex/config.toml (no browser, no OAuth, survives restarts, mints NO orphan agent). Codex loads MCP servers only at session start, so setup always ends with one full restart."
+description: Connect, upgrade, or recover Hirey Hi in Codex through the hosted MCP endpoint and the normal Codex OAuth flow. Use when workspace_workflows or hi_agent_status is missing, a Hi MCP call returns a structured 401/403 authentication error, the server reports an older plugin version, or the user asks to connect Hi.
 ---
 
-# Hi Onboard (Codex) — connect with a stable key, no OAuth
+# Hi Onboard
 
-Hi runs entirely through a remote MCP server at `https://mcp.hirey.ai/mcp` (legacy alias `https://hi.hirey.ai/mcp` still works). There is **no local install, no Hi account signup, no consent screen.** The DEFAULT and recommended setup is a **stable, non-rotating `hi_ak_` API key** in `~/.codex/config.toml` — Codex reads it every session and never rewrites it, so it can't vanish and never mints an orphan agent. (Browser OAuth via `codex mcp login hi` exists ONLY as a last-resort fallback.)
+Hirey Hi is configured by this plugin as a remote MCP server at `https://mcp.hirey.ai/mcp`.
+There is no npm package, local daemon, manually pasted API key, or anonymous Person to create.
 
-## If you landed here, this is what's wrong — and the one fix
+## Connect
 
-Any of these means **you have no Hi key configured yet** in `~/.codex/config.toml`:
-- the `hi_*` tools are missing from your inventory, or
-- `hi_agent_status` shows `connected:false` / `activated:false`, or `codex mcp list` shows `hi` with `Auth: Unsupported`, or
-- any `hi_*` call returns `401` / `missing_bearer` / `agent_not_registered`.
+1. Make sure the `hirey-hi` plugin is installed and enabled.
+2. Run `codex mcp login hi` and finish the browser OAuth flow.
+3. Fully quit and relaunch Codex so the MCP server and its tools load in the new session.
+4. Verify that `hi_agent_status` and `workspace_workflows` are present.
+5. Call `hi_agent_status` with `client_plugin_version: "0.2.8"`, then call
+   `workspace_workflows` with `action: catalog` before continuing.
 
-**The fix is always the same: write a key into config.toml, then restart Codex (below).** Do NOT probe `mcp.hirey.ai` with raw curl, do NOT grep the plugin folder, do NOT run `codex mcp login` / OAuth, and do NOT just retry in this session — Codex never re-scans MCP servers mid-session, so a retry is identical.
+If OAuth returns an error, report that exact error. Do not fall back to a local MCP process, an npm
+package, a stable `hi_ak_` key, or an invented installation endpoint.
 
-## Setup — the only path you need
+Authentication establishes the Account, Person, Workspace, Agent, and Agent Session used by Core.
+Anonymous browsing may create a pending Agent at the Gateway, but it does not create a permanent
+anonymous Person and it is not a replacement for OAuth when private Workspace data is needed.
 
-1. **Mint a key and write it to `~/.codex/config.toml` — one command:**
+## Recover an expired or invalid credential
 
-   ```bash
-   curl -fsSL https://hi.hirey.ai/v1/install/codex.sh | bash
-   ```
+Do not treat every 401 as a request to mint a new anonymous Agent. If Hi worked before, or
+`codex mcp list` shows `hi` with `Auth: Bearer token`, an old manual `Authorization` header may be
+overriding OAuth. For `invalid_token`, `missing_bearer`, or a failed OAuth refresh:
 
-   This mints an anonymous, non-rotating `hi_ak_` key and appends an `[mcp_servers.hi]` block (with `Authorization: Bearer hi_ak_…`) to `~/.codex/config.toml`. It is **idempotent** — if a `[mcp_servers.hi]` block already exists it won't add a duplicate.
+1. Tell the user that the saved Hi credential is no longer valid and that the browser login will
+   reconnect this Codex installation to their existing Hi account.
+2. Run `codex mcp logout hi`. Do not read, print, or ask the user to paste the old credential.
+3. If `hi` is a manual Bearer-token entry, run `codex mcp remove hi`, then recreate the normal
+   OAuth entry with `codex mcp add hi --url https://mcp.hirey.ai/mcp`.
+4. Run `codex mcp login hi` and let the user complete the normal Hi login page in the browser.
+5. Fully quit and relaunch Codex. In the new session call `hi_agent_status` with version `0.2.8`,
+   then call `workspace_workflows` with `action: catalog` and retry the original request once.
 
-   Prefer not to pipe a script? Do it by hand: `curl -s -X POST https://hi.hirey.ai/v1/agents/api-keys -H 'content-type: application/json' -d '{"display_name":"Codex","anonymous":true}'` and paste the returned `setup.codex_config_toml` block into `~/.codex/config.toml`.
+Do not use `/v1/agents/api-keys` for this recovery. That endpoint is only for a user who explicitly
+chooses anonymous API-key access; it must not replace or mask an expired signed-in credential.
 
-2. **Have the user fully quit and relaunch Codex** (`/quit`, then run `codex` again). MCP servers load only at session start. After relaunch, `codex mcp list` shows `hi` with **`Auth: Bearer token`** and the `hi_*` tools are present.
+## Version check and upgrade
 
-That's the whole setup. **Reading and searching work immediately.** Your Hi agent is created on the user's first WRITE (posting a profile/listing or contacting someone), which requires a phone/email/Google bind — see below. Don't claim "connected" until `hi_agent_status` or `codex mcp list` confirms it. One edge: caller-scoped calls (e.g. `connectors list_met`, notification prefs) need an attached agent and fail before one exists with `error_code: missing_caller_agent_id` + `next: {capability:"hi_agent_install"}` — just follow `next` (run `hi_agent_install` once, idempotent) and retry the same call.
+Plugin loading reads local files only. The first backend version information arrives during MCP
+initialization, `tools/list`, `hi_agent_status`, or a business response. Do not claim the installed
+plugin is current before receiving that policy and comparing it with this Skill's version.
 
-> Edge case (never-installed principal): if a `hi_*` call returns `agent_activation_required` and `hi_agent_activate` then fails with `agent_installation_not_found`, call `hi_agent_install` once, then retry. The key setup above already installs + activates, so this is rare — but handle it silently (don't bother the user).
+Read `_meta.hirey_plugin` (or `structuredContent.plugin` from `hi_agent_status`):
 
-## New vs returning user — binding at the first write
+- `update_required: true`: run `update_command` only when it exactly matches the allowlisted Codex
+  commands shown below; otherwise display it and stop for review. Fully quit and relaunch Codex,
+  then stop this session. Continue the original task once in the new session.
+- `update_recommended: true` with `update_required: false`: tell the user an update is available but
+  do not block a compatible anonymous read or business operation.
+- `update_required: null`: the server did not receive the local version. Compare this Skill's
+  version (`0.2.8`) with `minimum_supported` and `latest` locally.
 
-The first write returns `phone_binding_required`. Binding proves who the owner is and joins this Codex to their workspace. There are **three equivalent anchors — default to Google:**
+The current Codex update is:
 
-1. **DEFAULT — Sign in with Google** (`google_link`; lowest friction, nothing to type):
-   - Call `google_link({action:"start"})` → returns a `verification_url` (valid 10 min).
-   - **Give the user that URL and tell them what to expect**: open it in a **browser**, sign in with Google, and wait for the **"✅ Signed in as …" success page** — that page is the signal it worked. You can't open the browser; the user does. Ask them to reply once they see it (e.g. "好了" / "done").
-   - After they confirm (or after a few seconds), call `google_link({action:"poll"})` (no args). `status:"pending"` = not finished → wait, then poll again (**do not call `start` again**); `status:"verified"` = done → continue the original task. `link_expired` / `link_already_consumed` → call `start` once for a fresh URL.
-2. **Fallback — phone** (`phone_binding`): `bind` (user gives a phone number) → `verify` with the SMS code.
-3. **Fallback — email** (`email_binding`): `bind` (user gives an email) → `verify` with the emailed code.
+```bash
+codex plugin marketplace upgrade hirey
+codex plugin add hirey-hi@hirey
+```
 
-Offer Google first ("I can sign you in with Google — want me to?"); only go to phone or email if the user prefers them. All three converge to the same workspace, so a returning user can use whichever they bound before.
+After an update, fully restart Codex. Never edit the marketplace file or cached Skill by hand.
 
-- **New to Hi** → binding creates the agent + a fresh workspace.
-- **Returning** (used Hi before, any anchor, on another device/host) → sign in with the **same** Google account / phone / email; it **rejoins the existing workspace** (listings, credits, messages come back) and — under the 2026-06 one-user-one-agent model — **this Codex automatically becomes the user's single Hi agent**: Hi converges every device/platform of theirs into ONE canonical agent at bind, so there is no separate "previous agent" to pick or claim. The verified response (`google_link` poll, or `*_binding` verify) includes `joined_existing_workspace` and `workspace_agents` (normally just their one agent after convergence). Say it out loud — "you're back in your existing workspace." (`hi_agent_claim_export` → `hi_agent_claim_redeem` still exist as an advanced fallback if some device didn't auto-converge, but you normally don't need them. Don't use `connect` from a fresh install — it 403s `connect_requires_owned_agent`.)
+## Status recovery
 
-Because writes require a bind, offer Google sign-in early rather than after the user has created data.
+Use `error_code`, not the HTTP status by itself:
 
-## Final step (MANDATORY): profile + first listing — don't stop at "connected + bound"
+| HTTP | `error_code` | Action |
+|---:|---|---|
+| 401 | `missing_bearer` | Use the credential-recovery flow above, finish OAuth, then fully restart Codex. |
+| 401 | `invalid_token` | Remove an invalid manual Bearer override when present, run normal OAuth, restart, then retry once. |
+| 401 | `token_expired` | Let Codex refresh OAuth; if refresh fails, use the recovery flow. Do not create another Agent. |
+| 403 | `insufficient_oauth_scope` | Reauthorize the returned `required_scopes`; do not reinstall or create an Agent. |
+| 403 | existing identity-binding requirement | Bind through the returned Google/email/phone `next`, then retry once. |
+| 403 | `forbidden` | Stop and explain the business permission boundary; repeated login will not fix it. |
 
-Connecting and binding is only HALF of onboarding. An agent with no owner profile and no listing is
-invisible — it pollutes discovery and the user gets nothing back. After the bind succeeds you MUST
-drive the user to a profile + a first listing:
+A valid pending Agent may continue with the existing anonymous operations `people.find`,
+`people.explain`, and staged `capture.record`. Do not require login merely because the user is
+anonymous. Login is required only when the requested operation needs private Workspace data or an
+authenticated write.
 
-1. The `welcome` object — the `/v1/agents/activate` and `/v1/agents/me` responses (and the
-   `hi_agent_install` result) include a `welcome` object whenever the owner has no listing yet.
-   If present, run its `instruction_to_llm` verbatim (it asks the user's intent and walks
-   profile → listing, with a `recent_activity` preview + `intent_options`). Prefer it.
-2. Otherwise, ask **"What do you want Hi to do for you?"** (hire, find a job, raise, find a cofounder,
-   housing, friends/dates, a lawyer…), then call `owners` `update_profile` (real `display_name` +
-   `headline`) and `agent_listings` `upsert` (a first listing matching that goal). Confirm before posting.
-3. Verify with `owners.get` / `hi_agent_status` → if the profile is still empty or there are no
-   listings, resume the missing step. Onboarding is complete only once a profile exists and a first
-   listing is drafted — not at "you're connected."
+## Boundaries
 
-## channel_code (only if the user gave one)
+- The plugin only declares the remote MCP connection and usage skills.
+- `hi-mcp-server` adapts MCP and forwards the live capability call.
+- `hi-auth` performs OAuth and issues the Agent Session credential.
+- `hi-platform` exposes the public capability catalog and call endpoint.
+- Secretary Core owns Person, Workspace, Message, Moment, Relationship and the other business
+  records.
 
-If the prompt that sent you here included a referral/channel code ("channel_code: XYZ", "my channel code is XYZ", from a Hi owner page / invite link), after the tools load call **once**: `hi_agent_installation_update(metadata={"channel_code":"<verbatim value>"})`. Use the value verbatim; it's non-fatal (surface errors, don't loop); skip entirely if there was none — don't ask.
-
-## Fallback ONLY — browser OAuth
-
-Use `codex mcp login hi` **only if the key path is genuinely impossible** (e.g. no shell access to write config.toml). It does a zero-touch DCR + PKCE browser flow (a tab opens and closes in ~200ms, no form). Caveat: the OAuth token rotates and can vanish on a crashed refresh or reinstall, re-logging onto a **fresh orphan agent** — which is exactly why the key is the default. Never combine OAuth with a key block for `hi`; pick one.
-
-## Never
-
-- ❌ Probe `mcp.hirey.ai` with raw curl, or grep the plugin folder, to "discover" the tools — the fix for missing/unauth tools is always: key in config.toml → restart.
-- ❌ Treat "tools missing" as "needs OAuth." Missing/unauth `hi_*` tools = needs the **key**, not `codex mcp login`.
-- ❌ Tell the user to "retry" or "send another message" when tools are missing — Codex loads MCP only at startup; they must fully restart.
-- ❌ Ask the user for `client_id`/`client_secret`, `agent_id`, `HI_PLATFORM_BASE_URL`, or any npm install — none are part of the Codex path.
-- ❌ Claim the user is connected before `hi_agent_status` (or `codex mcp list`) confirms it.
+Readiness requires both: `hi_agent_status` reports a valid credential, and
+`workspace_workflows(action: "catalog")` succeeds. `activated:false` may still be a valid anonymous
+pending Agent; apply the anonymous-operation boundary above instead of treating it as disconnected.
