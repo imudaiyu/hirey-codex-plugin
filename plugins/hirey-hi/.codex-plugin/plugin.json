@@ -1,7 +1,7 @@
 {
   "name": "hirey-hi",
-  "version": "0.2.5",
-  "description": "Hirey Hi for Codex — find people for jobs, hiring, housing, friendship, dating, founders, investors, lawyers, and any other human-lead goal. Zero local install: ships skills + a remote MCP connection to Hi cloud, authenticated by default with a stable hi_ak_ key in ~/.codex/config.toml (browser OAuth is a fallback).",
+  "version": "0.2.8",
+  "description": "Hirey Hi for Codex — use the existing HiRey Person, Workspace, Moment, Page, Need, People, Message and Meeting workflows through the hosted MCP service.",
   "author": {
     "name": "Hirey",
     "url": "https://hi.hirey.ai"
@@ -12,8 +12,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Hirey Hi",
-    "shortDescription": "Find people for hiring, jobs, housing, dating, friendship, founders, investors, lawyers, and any other human-lead work — backed by the Hi platform via a remote MCP connection.",
-    "longDescription": "Hirey Hi is a people-to-people platform. This Codex plugin gives Codex first-class access to Hi: post a search listing, browse the live match feed, search candidates, start a pairing thread, schedule meetings (Zoom or phone), and listen for inbound replies — all through Hi's public capability surface exposed as MCP tools.\n\nInstall path: this plugin bundles SKILL definitions and a `.mcp.json` pointing at `https://mcp.hirey.ai/mcp`. After enabling in `/plugins`, fully quit and relaunch Codex so the MCP server actually loads (Codex spawns MCP servers only at session start — openai/codex#4955, #7767). Then authenticate with a stable key: run `curl -fsSL https://hi.hirey.ai/v1/install/codex.sh | bash` (appends an `[mcp_servers.hi]` Bearer hi_ak_ block to `~/.codex/config.toml`, which cleanly overrides the bundled OAuth entry) and fully restart Codex. Do NOT run `codex mcp login hi` — OAuth is the documented fallback only. No npm package, no local daemon, no state dir required on the user's machine — every tool call goes to Hi cloud.",
+    "shortDescription": "Use HiRey people, workspace, messaging and meeting workflows through the hosted MCP service.",
+    "longDescription": "Hirey Hi connects Codex to HiRey's public capability surface at `https://mcp.hirey.ai/mcp`. The plugin uses the normal Codex OAuth flow and exposes the existing `workspace_workflows` tool; that tool's live catalog is authoritative for supported actions and confirmation requirements. No npm package or local MCP process is required.",
     "developerName": "Hirey",
     "category": "Productivity",
     "capabilities": [
@@ -21,15 +21,9 @@
       "MCP"
     ],
     "defaultPrompt": [
-      "Hi is Hirey's people-to-people platform for jobs or candidates, landlords or tenants, friends, dates or marriage partners, lawyers, founders, investors, cofounders, and any other human leads.",
-      "If `hi_agent_status` is in the tool inventory and reports `connected:true` + `activated:true`, you are ready to use Hi — go straight to the `hi-use` skill.",
-      "If the `hi_*` tools are NOT in your inventory, OR `hi_agent_status` shows connected:false / Auth: Unsupported, OR a call returns missing_bearer / 401: you almost certainly have NO key configured yet — a restart ALONE will not load the tools (the server rejects an unauthenticated connect). Bounce to the `hi-onboard` skill: run `curl -fsSL https://hi.hirey.ai/v1/install/codex.sh | bash` (writes a hi_ak_ key to ~/.codex/config.toml), THEN fully quit and relaunch Codex (Codex loads MCP servers only at session start and never re-scans — openai/codex#4955, #7767). Never probe the MCP with raw curl, never run `codex mcp login` to 'fix' it, and never tell the user to 'retry'/'send another message' in-session.",
-      "If `hi_agent_status` reports not connected, or any `hi_*` tool returns an auth error, follow the `hi-onboard` skill: by DEFAULT it sets up a stable `hi_ak_` key in `~/.codex/config.toml` (no browser, no OAuth, no orphan agent); `codex mcp login hi` is only the documented fallback.",
-      "Two supported auth paths: (1) DEFAULT — a stable, non-rotating Hi API key (hi_ak_…) set as a literal Authorization header in ~/.codex/config.toml: written once, never rewritten, survives restarts, mints NO orphan agent (use the `hi-stable-key` skill, or run `curl -fsSL https://hi.hirey.ai/v1/install/codex.sh | bash`); and (2) FALLBACK — zero-config OAuth via `codex mcp login hi` (its token rotates and can vanish on a crashed refresh/reinstall, re-logging onto a fresh orphan agent). Prefer the key. Never ask the user to hand-type a client_id/client_secret or run a local hi-mcp-server; both paths are pure remote MCP and provisioned for them.",
-      "Business tools (agent_listings, matching_sessions, pairings, thread_meetings, calendar, listing_taxonomy, …) are loaded dynamically from Hi's public capability catalog. Their names and schemas are authoritative; never invent a tool that is not in the live inventory.",
-      "For inbound events (replies in a pairing thread, meeting confirmations, match updates), call `hi_agent_events_wait` to long-poll, or `hi_agent_events_claim` + `hi_agent_events_ack` to drain. Codex has no persistent push channel; durable pull is the contract.",
-      "When the user asks to 'find', 'recruit', 'match', 'reach out to', 'pair with', or 'meet' anyone, treat that as a Hi workflow rather than a generic web search.",
-      "Use the user's chat language for any user-facing copy. Hi tool payloads are language-neutral; localization lives in your replies."
+      "Start Hi with `hi_agent_status` using version 0.2.8. Follow `hi-onboard` for update, login, or credential recovery.",
+      "Use `workspace_workflows` and its live catalog. Anonymous access stays bounded; private Workspace work requires login.",
+      "On 401 use `error_code`: clear an invalid manual key, run normal Codex OAuth, restart, then retry once."
     ],
     "brandColor": "#2563EB"
   }
