@@ -24,10 +24,11 @@ installation has no callable CLI and stop without changing the Hi configuration.
 
 1. Make sure the `hirey-hi` plugin is installed and enabled. Run the marketplace commands yourself
    with `codex_bin`; do not hand them to the user.
+   Run the configuration preflight below before login or asking for a restart.
 2. Run the MCP login with `codex_bin` and let the user finish only the browser OAuth page.
 3. Fully quit and relaunch Codex so the MCP server and its tools load in the new session.
 4. Verify that `hi_agent_status` and `workspace_workflows` are present.
-5. Call `hi_agent_status` with `client_plugin_version: "0.2.10"`, then call
+5. Call `hi_agent_status` with `client_plugin_version: "0.2.11"`, then call
    `workspace_workflows` with `action: catalog` before continuing.
 
 If OAuth returns an error, report that exact error. Do not fall back to a local MCP process, an npm
@@ -47,17 +48,41 @@ overriding OAuth. For `invalid_token`, `missing_bearer`, or a failed OAuth refre
    reconnect this Codex installation to their existing Hi account.
 2. Resolve `codex_bin` as described above and run the logout yourself. Do not read, print, or ask
    the user to paste the old credential.
-3. If `hi` is a manual Bearer-token entry, use `codex_bin` to remove only the `hi` MCP entry, then
-   recreate the normal OAuth entry at `https://mcp.hirey.ai/mcp`. Do not edit TOML by hand.
+3. If `hi` is an invalid manual Bearer-token entry, remove only that override through `codex_bin`
+   after confirming the installed, enabled plugin owns the normal endpoint. Let the plugin supply
+   the connection; do not recreate a competing manual URL-only entry. Preserve deliberate custom
+   endpoints and restrictions for review. Do not edit TOML by hand.
 4. Use `codex_bin` to start login when the add operation did not already complete OAuth; let the
    user complete only the normal Hi login page in the browser.
-5. Fully quit and relaunch Codex. In the new session call `hi_agent_status` with version `0.2.10`,
+5. Fully quit and relaunch Codex. In the new session call `hi_agent_status` with version `0.2.11`,
    then call `workspace_workflows` with `action: catalog` and retry the original request once.
 
 Do not use `/v1/agents/api-keys` for this recovery. That endpoint is only for a user who explicitly
 chooses anonymous API-key access; it must not replace or mask an expired signed-in credential.
 
 ## Version check and upgrade
+
+### Configuration preflight
+
+A manual `mcp_servers.hi` entry can override the plugin's version headers even while OAuth and
+business calls work. Do not diagnose this as expired credentials or repeatedly request restarts.
+Use Python 3.11+ to run `scripts/check_mcp_conflict.py` relative to this Skill, with
+`--config <active Codex config.toml>` and `--plugin-mcp <installed plugin .mcp.json>`.
+The helper is read-only and emits no configuration values. If unavailable, inspect only the
+relevant structure without printing credentials; do not install dependencies just for this check.
+
+- `legacy_url_only_override`: first verify `hirey-hi@hirey` is installed and enabled. When the
+  user authorized connection repair, explain the conflict and run `codex_bin mcp remove hi`.
+  Do not log out or delete credentials. Then verify `codex_bin mcp get hi --json` resolves the
+  plugin's version headers, without printing unrelated sensitive fields.
+- `review_required`: retain the entry; custom endpoints, auth, restrictions or disabled settings
+  must not be silently removed.
+- `plugin_only`: no duplicate override detected; do not change config.
+- `inspection_failed` or `plugin_config_incomplete`: do not mutate config.
+
+After an actual repair, restart once and check an ordinary read-only `catalog` call without
+version arguments. A successful status call with a manually supplied version alone does not prove
+transport metadata works. Keep local candidate marketplace sources local during acceptance.
 
 Plugin loading reads local files only. The first backend version information arrives during MCP
 initialization, `tools/list`, `hi_agent_status`, or a business response. Do not claim the installed
@@ -71,7 +96,7 @@ Read `_meta.hirey_plugin` (or `structuredContent.plugin` from `hi_agent_status`)
 - `update_recommended: true` with `update_required: false`: tell the user an update is available but
   do not block a compatible anonymous read or business operation.
 - `update_required: null`: the server did not receive the local version. Compare this Skill's
-  version (`0.2.10`) with `minimum_supported` and `latest` locally.
+  version (`0.2.11`) with `minimum_supported` and `latest` locally.
 
 The current Codex update is:
 

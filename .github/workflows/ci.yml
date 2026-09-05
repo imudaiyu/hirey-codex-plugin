@@ -1,0 +1,27 @@
+name: Plugin CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m unittest discover -s tests -v
+      - run: python -m json.tool plugins/hirey-hi/.codex-plugin/plugin.json >/dev/null
+      - run: python -m json.tool plugins/hirey-hi/.mcp.json >/dev/null
+      - name: Check pull request diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: git diff --check "$BASE_SHA"...HEAD

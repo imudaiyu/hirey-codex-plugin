@@ -2,7 +2,11 @@
   "mcpServers": {
     "hi": {
       "url": "https://mcp.hirey.ai/mcp",
-      "oauth_resource": "https://mcp.hirey.ai/mcp"
+      "oauth_resource": "https://mcp.hirey.ai/mcp",
+      "http_headers": {
+        "x-hirey-plugin-host": "codex",
+        "x-hirey-plugin-version": "0.2.11"
+      }
     }
   }
 }
