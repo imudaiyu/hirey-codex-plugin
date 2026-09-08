@@ -16,11 +16,11 @@ manually managed API key.
    browser OAuth page and never needs to type a `codex` command.
 3. Fully restart Codex.
 4. Verify `hi_agent_status` and `workspace_workflows` are present.
-5. Call `hi_agent_status` with `client_plugin_version: "0.2.11"`, then call
+5. Call `hi_agent_status` with `client_plugin_version: "0.2.12"`, then call
    `workspace_workflows` with `action: catalog`.
 
 The live catalog contains the implemented Person, Workspace, Moment, Page, Need, People, Message,
-Meeting, Product Signal, and Repair operations. New operations are added to their owning service and
+Meeting, Agentic Media, Product Signal, and Repair operations. New operations are added to their owning service and
 then appear through the same catalog; the plugin does not create parallel tool names.
 
 ## Recover a previous login
@@ -66,6 +66,7 @@ plugins/hirey-hi/
   .codex-plugin/plugin.json
   .mcp.json
   skills/
+    agentic-media/SKILL.md
     hi-onboard/SKILL.md
     hi-use/SKILL.md
     hi-events/SKILL.md
