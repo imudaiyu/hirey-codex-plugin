@@ -122,7 +122,7 @@ Use `error_code`, not the HTTP status by itself:
 | 401 | `missing_bearer` | Use the credential-recovery flow above, finish OAuth, then fully restart Codex. |
 | 401 | `invalid_token` | Remove an invalid manual Bearer override when present, run normal OAuth, restart, then retry once. |
 | 401 | `token_expired` | Let Codex refresh OAuth; if refresh fails, use the recovery flow. Do not create another Agent. |
-| 403 | `insufficient_oauth_scope` | Reauthorize the returned `required_scopes`; do not reinstall or create an Agent. |
+| 403 | `insufficient_oauth_scope` | Reauthorize with the exact union required by the active Skill/workflow, including the returned `required_scopes`; do not request the full catalog, reinstall, or create an Agent. |
 | 403 | existing identity-binding requirement | Bind through the returned Google/email/phone `next`, then retry once. |
 | 403 | `forbidden` | Stop and explain the business permission boundary; repeated login will not fix it. |
 

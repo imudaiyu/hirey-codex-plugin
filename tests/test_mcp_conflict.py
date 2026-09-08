@@ -20,6 +20,22 @@ class ConflictTests(unittest.TestCase):
         self.assertTrue(all(len(prompt) <= 128 for prompt in prompts))
         self.assertTrue(any("Agentic Media" in prompt for prompt in prompts))
 
+    def test_agentic_media_upgrade_requests_minimum_workflow_scope_union(self):
+        root = Path(__file__).resolve().parents[1] / "plugins/hirey-hi/skills"
+        media_skill = (root / "agentic-media/SKILL.md").read_text(encoding="utf-8")
+        onboard_skill = (root / "hi-onboard/SKILL.md").read_text(encoding="utf-8")
+        for scope in (
+            "hirey.f01.identity.me",
+            "hirey.f10.agentic_media.work.create",
+            "hirey.f10.agentic_media.upload.describe",
+            "hirey.f10.agentic_media.upload.complete",
+            "hirey.f10.agentic_media.work.status",
+        ):
+            self.assertIn(scope, media_skill)
+        self.assertIn("not only the\nsingle scope", media_skill)
+        self.assertIn("exact union required by the active Skill/workflow", onboard_skill)
+        self.assertIn("do not request the full catalog", onboard_skill)
+
     def test_plugin_only(self):
         self.assertEqual(module.inspect({}, PLUGIN)["status"], "plugin_only")
 

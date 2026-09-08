@@ -42,6 +42,22 @@ Stop with `contract_not_describable` if an operation, payload, result, confirmat
 idempotency rule, or limit is missing. The live service is authoritative; this list is routing
 guidance, not permission to invent a missing operation.
 
+For an existing installation whose first private-upload call returns `insufficient_oauth_scope`,
+reauthorize once with the exact union needed for the private upload and preview flow, not only the
+single scope returned by the failed call:
+
+- `hirey.f01.identity.me`
+- `hirey.f10.agentic_media.work.create`
+- `hirey.f10.agentic_media.upload.describe`
+- `hirey.f10.agentic_media.upload.complete`
+- `hirey.f10.agentic_media.work.status`
+
+Run `codex mcp login hi --scopes <the comma-separated union above>` yourself, let the user approve
+the normal browser page, then continue in a fresh Codex process. An explicit OAuth scope request
+replaces the current access token's usable scope set, so a singleton repair can make the next step
+fail even though client registration retained earlier scopes. Do not request cancel, revise,
+freeze, publish, withdraw, or unrelated catalog scopes before the user actually asks for that action.
+
 ## Upload the local file
 
 Require `agentic_media.work.create` describe to return `transport_policy` with accepted suffixes,
