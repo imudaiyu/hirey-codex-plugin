@@ -135,12 +135,13 @@ def describe_canonical_source(media_ref: str) -> dict[str, Any]:
 
 def preflight_local_file(
     path: str | os.PathLike[str], *, intent: str, allowed_suffixes: Iterable[str],
-    max_bytes: int, quota_remaining_bytes: int, part_size: int, max_parts: int,
+    max_bytes: int, quota_remaining_bytes: int | None, part_size: int, max_parts: int,
 ) -> dict[str, Any]:
     """Validate only rules explicitly supplied by the live control contract."""
     checked_intent = validate_intent(intent)
     maximum = _positive(max_bytes, "max_bytes")
-    quota = _nonnegative(quota_remaining_bytes, "quota_remaining_bytes")
+    quota = (_nonnegative(quota_remaining_bytes, "quota_remaining_bytes")
+             if quota_remaining_bytes is not None else None)
     chunk = _positive(part_size, "part_size")
     part_limit = _positive(max_parts, "max_parts")
     source = describe_local_source(path)
@@ -154,7 +155,7 @@ def preflight_local_file(
     signature = _video_signature(Path(source["path"]))
     if source["size"] > maximum:
         raise UploadError("upload_too_large", "file exceeds the live contract maximum")
-    if source["size"] > quota:
+    if quota is not None and source["size"] > quota:
         raise UploadError("quota_exceeded", "file exceeds the currently reported quota")
     count = (source["size"] + chunk - 1) // chunk
     if count > part_limit:
@@ -525,7 +526,9 @@ def _parser() -> argparse.ArgumentParser:
     preflight.add_argument("--intent", required=True, choices=sorted(INTENTS))
     preflight.add_argument("--allowed-suffix", action="append", required=True)
     preflight.add_argument("--max-bytes", required=True, type=int)
-    preflight.add_argument("--quota-remaining-bytes", required=True, type=int)
+    quota = preflight.add_mutually_exclusive_group(required=True)
+    quota.add_argument("--quota-remaining-bytes", type=int)
+    quota.add_argument("--quota-unlimited", action="store_true")
     preflight.add_argument("--part-size", required=True, type=int)
     preflight.add_argument("--max-parts", required=True, type=int)
 
@@ -560,7 +563,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "preflight":
             _json_out(preflight_local_file(
                 args.path, intent=args.intent, allowed_suffixes=args.allowed_suffix,
-                max_bytes=args.max_bytes, quota_remaining_bytes=args.quota_remaining_bytes,
+                max_bytes=args.max_bytes,
+                quota_remaining_bytes=None if args.quota_unlimited else args.quota_remaining_bytes,
                 part_size=args.part_size, max_parts=args.max_parts,
             ))
         elif args.command == "plan":

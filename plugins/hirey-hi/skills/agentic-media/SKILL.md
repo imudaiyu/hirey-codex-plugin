@@ -44,9 +44,13 @@ guidance, not permission to invent a missing operation.
 
 ## Upload the local file
 
-Run `scripts/agentic_media_upload.py preflight` using limits returned by the live service. Compute the
-whole-file SHA-256 before `agentic_media.work.create`; send the filename, MIME type, byte size,
-digest, title, exact intent, original task ref, and a stable idempotency key.
+Require `agentic_media.work.create` describe to return `transport_policy` with accepted suffixes,
+maximum bytes, default/minimum/maximum part sizes, maximum parts, and explicit quota enforcement.
+Run `scripts/agentic_media_upload.py preflight` using those live values. When quota enforcement is
+false use `--quota-unlimited`; when it is true require a numeric remaining-byte value and use
+`--quota-remaining-bytes`. Stop with `contract_not_describable` if either policy is incomplete.
+Compute the whole-file SHA-256 before `agentic_media.work.create`; send the filename, MIME type, byte
+size, digest, title, exact intent, original task ref, and a stable idempotency key.
 
 Save only stable work/upload refs plus safe local file identity in the helper's mode-0600 state file.
 Call `agentic_media.upload.describe` immediately before uploading. Pass that fresh result to the

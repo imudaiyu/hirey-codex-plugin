@@ -66,6 +66,16 @@ class AgenticMediaUploadTests(unittest.TestCase):
         self.assertEqual(result["part_count"], 3)
         self.assertEqual(result["container"], "iso-bmff")
         self.assertEqual(result["content_sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
+        unlimited = media.preflight_local_file(
+            path,
+            intent="final_master",
+            allowed_suffixes=[".mp4"],
+            max_bytes=100,
+            quota_remaining_bytes=None,
+            part_size=16,
+            max_parts=3,
+        )
+        self.assertEqual(unlimited["total_size"], 40)
         self.assert_code(
             "quota_exceeded",
             lambda: media.preflight_local_file(
