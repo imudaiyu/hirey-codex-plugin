@@ -341,6 +341,49 @@ def new_session_state(
     return validate_session_state(state)
 
 
+def _protect_state_file(fd: int) -> None:
+    """Restrict the open file before writing any private session metadata."""
+    if os.name != "nt":
+        os.fchmod(fd, 0o600)
+        return
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+
+    advapi = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    convert = advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW
+    convert.argtypes = [wintypes.LPCWSTR, wintypes.DWORD,
+                        ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(wintypes.DWORD)]
+    convert.restype = wintypes.BOOL
+    secure = advapi.SetKernelObjectSecurity
+    secure.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.c_void_p]
+    secure.restype = wintypes.BOOL
+    kernel.LocalFree.argtypes = [ctypes.c_void_p]
+    kernel.LocalFree.restype = ctypes.c_void_p
+    kernel.ReOpenFile.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD]
+    kernel.ReOpenFile.restype = wintypes.HANDLE
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.restype = wintypes.BOOL
+    descriptor = ctypes.c_void_p()
+    # Protected DACL: only the file owner has access, without inherited grants.
+    if not convert("D:P(A;;FA;;;OW)", 1, ctypes.byref(descriptor), None):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        # CRT descriptors do not request WRITE_DAC. Reopen the same object with
+        # that right rather than resolving its filename a second time.
+        security_handle = kernel.ReOpenFile(msvcrt.get_osfhandle(fd), 0x40000, 7, 0)
+        if security_handle == wintypes.HANDLE(-1).value:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            if not secure(security_handle, 0x80000004, descriptor):
+                raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            kernel.CloseHandle(security_handle)
+    finally:
+        kernel.LocalFree(descriptor)
+
+
 class SessionStore:
     def __init__(self, path: str | os.PathLike[str]):
         self.path = Path(path)
@@ -353,8 +396,8 @@ class SessionStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_name = tempfile.mkstemp(prefix=self.path.name + ".", dir=self.path.parent)
         try:
-            os.fchmod(fd, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                _protect_state_file(handle.fileno())
                 json.dump(clean, handle, sort_keys=True, separators=(",", ":"))
                 handle.write("\n")
                 handle.flush()

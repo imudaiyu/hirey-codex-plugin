@@ -1,9 +1,12 @@
 import importlib.util
 import hashlib
 import json
+import os
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 
 HELPER = (
@@ -146,11 +149,46 @@ class AgenticMediaUploadTests(unittest.TestCase):
         path = self.root / "session.json"
         store = media.SessionStore(path)
         store.save(self.state())
-        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        if os.name == "nt":
+            env = dict(os.environ, TEST_STATE_PATH=str(path))
+            env.pop("PSModulePath", None)
+            acl = subprocess.check_output(
+                ["powershell", "-NoProfile", "-Command",
+                 "[IO.File]::GetAccessControl($env:TEST_STATE_PATH).Sddl"],
+                env=env, text=True,
+            ).strip().split("D:", 1)[1]
+            self.assertTrue(acl.startswith("P"), acl)
+            self.assertEqual(acl[acl.index("("):], "(A;;FA;;;OW)")
+        else:
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         saved = path.read_text()
         self.assertNotIn("token", saved.lower())
         self.assertNotIn("presign", saved.lower())
         self.assertNotIn("x-amz", saved.lower())
+
+    def test_permission_failure_closes_file_and_preserves_previous_state(self):
+        path = self.root / "session.json"
+        store = media.SessionStore(path)
+        state = self.state()
+        store.save(state)
+        previous = path.read_bytes()
+        with mock.patch.object(media, "_protect_state_file", side_effect=OSError("permission failed")):
+            with self.assertRaisesRegex(OSError, "permission failed"):
+                store.save(state)
+        self.assertEqual(path.read_bytes(), previous)
+        self.assertEqual(list(self.root.glob("session.json.*")), [])
+        store.save(state)
+        self.assertEqual(store.load(), state)
+
+    def test_replace_failure_preserves_state_and_removes_temporary_file(self):
+        store = media.SessionStore(self.root / "session.json")
+        state = self.state()
+        store.save(state)
+        with mock.patch.object(media.os, "replace", side_effect=OSError("replace failed")):
+            with self.assertRaisesRegex(OSError, "replace failed"):
+                store.save(state)
+        self.assertEqual(store.load(), state)
+        self.assertEqual(list(self.root.glob("session.json.*")), [])
 
     def test_live_contract_requires_describable_exact_operations(self):
         roles = {
