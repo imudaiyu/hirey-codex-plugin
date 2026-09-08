@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 
@@ -7,10 +8,18 @@ spec = importlib.util.spec_from_file_location("conflict", path)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 PLUGIN = {"mcpServers": {"hi": {"url": "https://mcp.hirey.ai/mcp",
-          "http_headers": {"x-hirey-plugin-host": "codex", "x-hirey-plugin-version": "0.2.11"}}}}
+          "http_headers": {"x-hirey-plugin-host": "codex", "x-hirey-plugin-version": "0.2.12"}}}}
 
 
 class ConflictTests(unittest.TestCase):
+    def test_codex_manifest_prompt_budget_and_agentic_media_entry(self):
+        manifest_path = Path(__file__).resolve().parents[1] / "plugins/hirey-hi/.codex-plugin/plugin.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        prompts = manifest["interface"]["defaultPrompt"]
+        self.assertLessEqual(len(prompts), 3)
+        self.assertTrue(all(len(prompt) <= 128 for prompt in prompts))
+        self.assertTrue(any("Agentic Media" in prompt for prompt in prompts))
+
     def test_plugin_only(self):
         self.assertEqual(module.inspect({}, PLUGIN)["status"], "plugin_only")
 
