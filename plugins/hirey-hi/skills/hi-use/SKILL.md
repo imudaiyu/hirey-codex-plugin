@@ -53,7 +53,12 @@ When the user asks to reach, connect with, or get an introduction to a specific 
 workflow instead of stopping after drafting suggested prose:
 
 1. Search `people.find_private` first. Use `people.find` only when the private result does not identify
-   the target. If multiple people match, ask the user to disambiguate before continuing.
+   the target. If a private result has `source_scope: reachable_private`, explain that the Person was
+   found through an opted-in Connector; do not say they are in the user's own private network. Treat
+   its embedded `reach` as a discovery hint only and continue to the authoritative policy check below.
+   If multiple people match, ask the user to disambiguate before continuing. If both searches are
+   empty, never print the raw `[]`; say no exact accessible match was found, ask for another spelling
+   or identifying detail, and offer to save a private Need with `need.create`.
 2. Call `contact.policy` with that exact `target_person_id`. Treat its `reach` object as the only
    executable route authority; never infer a Connector from `relationship.list` or from prose.
    If `allowed` is false, stop and report the returned reason without proposing a workaround.

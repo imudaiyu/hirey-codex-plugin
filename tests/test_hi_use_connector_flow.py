@@ -17,6 +17,10 @@ class HiUseConnectorFlowTest(unittest.TestCase):
             "reach.route.decide",
             "never infer a Connector from `relationship.list`",
             "do not fabricate a Connector",
+            "source_scope: reachable_private",
+            "do not say they are in the user's own private network",
+            "never print the raw `[]`",
+            "ask for another spelling",
         ):
             self.assertIn(required, skill)
 
