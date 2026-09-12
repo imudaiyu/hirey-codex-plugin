@@ -16,7 +16,7 @@ manually managed API key.
    browser OAuth page and never needs to type a `codex` command.
 3. Fully restart Codex.
 4. Verify `hi_agent_status` and `workspace_workflows` are present.
-5. Call `hi_agent_status` with `client_plugin_version: "0.2.12"`, then call
+5. Call `hi_agent_status` with `client_plugin_version: "0.2.13"`, then call
    `workspace_workflows` with `action: catalog`.
 
 The live catalog contains the implemented Person, Workspace, Moment, Page, Need, People, Message,
@@ -49,15 +49,19 @@ The plugin does not own any of those records. It only connects the Codex host to
 
 ## Release version contract
 
-Every plugin or Skill release must update both:
+Prepare and release a plugin version in this order:
 
 1. `.codex-plugin/plugin.json` → `version`;
-2. `src/services/hireyPluginRelease.ts` → `HIREY_CODEX_PLUGIN_RELEASE.latest` and, only when
-   compatibility is intentionally dropped, `minimum_supported`.
+2. `src/services/hireyPluginRelease.ts` → `HIREY_PLUGIN_CANDIDATE_VERSIONS.codex` while the
+   candidate is being reviewed and tested;
+3. publish the public marketplace, complete real-host acceptance, then promote
+   `HIREY_CODEX_PLUGIN_RELEASE.latest`. Change `minimum_supported` only when compatibility is
+   intentionally dropped.
 
-The automated contract test fails when the manifest and runtime `latest` version differ. Publishing
-the repository alone does not update an installed Codex plugin: refresh the marketplace, reinstall
-`hirey-hi@hirey`, and fully restart Codex for end-to-end release verification.
+The server recommends an upgrade only after `latest` is promoted, so an old test installation can
+verify the prompt without being silently replaced. Publishing the repository alone does not update
+an installed Codex plugin: refresh the marketplace, reinstall `hirey-hi@hirey`, and fully restart
+Codex for end-to-end release verification.
 
 ## Repository layout
 

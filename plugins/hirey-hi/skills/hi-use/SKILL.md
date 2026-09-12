@@ -9,7 +9,7 @@ Hi exposes one MCP tool, `workspace_workflows`. Its `action: catalog` result is 
 for the existing operations, their purpose, write behavior, and confirmation requirement.
 
 Before the first Hi business call in a new session, call
-`hi_agent_status({"client_plugin_version":"0.2.12"})`. Follow its plugin policy and authentication
+`hi_agent_status({"client_plugin_version":"0.2.13"})`. Follow its plugin policy and authentication
 state exactly. A recommended update does not block a compatible call; a required update ends the
 current session after upgrading because Codex reloads Skills only in a new session.
 
@@ -36,6 +36,10 @@ or private reads before login.
 
 - Private network: `person.observe`, `person.network.save`, `person.note.add`,
   `person.private_contact.set`, `commitment.create`, `people.find_private`, `people.detail`.
+- Capture recovery: use `capture.list` when the user wants to find earlier captures or local
+  receipt state is missing, then `capture.get` for the exact safe processing receipt. Use the
+  returned `moment_id` with `moment.get` for the saved business record. Do not reconstruct Capture
+  IDs and do not claim these operations return raw input, transcripts or extracted text.
 - Finding people: `need.create`, `listing.create`, `listing.change_status`,
   `discovery.find_for_need`, `people.find`, `match.record`, `match.select`.
 - Contact: `pairing.create`, `pairing.decide`, `message.send`, `message.reply`,
